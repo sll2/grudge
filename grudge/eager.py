@@ -395,22 +395,44 @@ class _RankBoundaryCommunication:
         self.bdry_discr = discrwb.discr_from_dd(self.remote_btag)
         self.local_dof_array = discrwb.project("vol", self.remote_btag, vol_field)
 
-        local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
+        #local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
+        local_data = flatten(self.local_dof_array)
+
+        # Need size of array after flattened -- could put this code somewhere else
+        group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
+        group_starts = np.cumsum([0] + group_sizes)
+        local_data_size = group_starts[-1]
+
+        # Need to pass in starting pointer of local_data and remote_data_host to mpi
+        bdata = local_data.base_data # Get base address of pyopencl array object in memory
+        cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
+        local_data_ptr = cl_mem # Get device pointer out of cl_mem object
 
         comm = self.discrwb.mpi_communicator
 
+        #self.send_req = comm.Isend(
+        #        local_data, remote_rank, tag=self.tag)
         self.send_req = comm.Isend(
-                local_data, remote_rank, tag=self.tag)
+                local_data_ptr, remote_rank, tag=self.tag)
 
-        self.remote_data_host = np.empty_like(local_data)
-        self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
+        # Need to update receiving array as well
+        #self.remote_data_host = np.empty_like(local_data)
+        #self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
+        self.remote_data_host = self.array_context.empty(local_data_size, dtype=self.local_dof_array.entry_dtype)
+        bdata = self.remote_data_host.base_data # Get base address of pyopencl array object in memory
+        cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
+        remote_data_ptr = cl_mem # Get device pointer out of cl_mem object
+        # Get underlying pointer for remote data array
+        self.recv_req = comm.Irecv(remote_data_ptr, remote_rank, self.tag)
 
     def finish(self):
         self.recv_req.Wait()
 
-        actx = self.array_context
+        #actx = self.array_context
+        #remote_dof_array = unflatten(self.array_context, self.bdry_discr,
+        #        actx.from_numpy(self.remote_data_host))
         remote_dof_array = unflatten(self.array_context, self.bdry_discr,
-                actx.from_numpy(self.remote_data_host))
+                self.remote_data_host)
 
         bdry_conn = self.discrwb.get_distributed_boundary_swap_connection(
                 sym.as_dofdesc(sym.DTAG_BOUNDARY(self.remote_btag)))
