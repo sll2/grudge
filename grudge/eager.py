@@ -34,6 +34,7 @@ from grudge.discretization import DGDiscretizationWithBoundaries
 from grudge.symbolic.primitives import TracePair
 
 from numbers import Number
+from mpi4py import MPI
 
 __doc__ = """
 .. autoclass:: EagerDGDiscretization
