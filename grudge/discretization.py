@@ -45,7 +45,7 @@ class DGDiscretizationWithBoundaries:
     """
 
     def __init__(self, array_context, mesh, order=None,
-            quad_tag_to_group_factory=None, mpi_communicator=None):
+            quad_tag_to_group_factory=None, mpi_communicator=None, mpi_dtype=None):
         """
         :param quad_tag_to_group_factory: A mapping from quadrature tags (typically
             strings--but may be any hashable/comparable object) to a
@@ -101,6 +101,8 @@ class DGDiscretizationWithBoundaries:
                         mpi_communicator, array_context)
 
         self.mpi_communicator = mpi_communicator
+
+        self.mpi_dtype = mpi_dtype
 
     def get_management_rank_index(self):
         return 0

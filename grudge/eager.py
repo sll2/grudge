@@ -34,7 +34,6 @@ from grudge.discretization import DGDiscretizationWithBoundaries
 from grudge.symbolic.primitives import TracePair
 
 from numbers import Number
-from mpi4py import MPI
 
 __doc__ = """
 .. autoclass:: EagerDGDiscretization
@@ -411,14 +410,16 @@ class _RankBoundaryCommunication:
         #local_data_ptr_buf = bytes(local_data_ptr, 0, local_data_size*local_data.dtype.itemsize) # Need to wrap data in a python buffer object - offset of 0, starting at dev ptr
         size = local_data_size*local_data.dtype.itemsize
         #local_data_ptr_buf = PyMemoryView_FromMemory((char *) (local_data_ptr + offset), size, PyBUF_WRITE)
+        local_data_ptr_buf = memory_view(local_data_ptr + offset, size, PyBUF_WRITE) #from mybind11
         local_data_ptr_buf = bytes(local_data_ptr)
 
         comm = self.discrwb.mpi_communicator
+        data_type = self.discrwb.mpi_dtype
 
         #self.send_req = comm.Isend(
         #        local_data, remote_rank, tag=self.tag)
         self.send_req = comm.Isend(
-                [local_data_ptr_buf, MPI.FLOAT], remote_rank, tag=self.tag)
+                [local_data_ptr_buf, data_type], remote_rank, tag=self.tag)
 
         # Need to update receiving array as well
         #self.remote_data_host = np.empty_like(local_data)
@@ -430,7 +431,7 @@ class _RankBoundaryCommunication:
         #remote_data_ptr_buf = PyMemoryView_FromMemory((char *) (remote_data_ptr + offset), size, PyBUF_WRITE)
         remote_data_ptr_buf = bytes(remote_data_ptr)
         # Get underlying pointer for remote data array
-        self.recv_req = comm.Irecv([remote_data_ptr_buf, MPI.FLOAT], remote_rank, self.tag)
+        self.recv_req = comm.Irecv([remote_data_ptr_buf, data_type], remote_rank, self.tag)
 
     def finish(self):
         self.recv_req.Wait()
