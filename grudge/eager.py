@@ -419,7 +419,7 @@ class _RankBoundaryCommunication:
         #self.send_req = comm.Isend(
         #        local_data, remote_rank, tag=self.tag)
         self.send_req = comm.Isend(
-                [local_data_ptr_buf, data_type], remote_rank, tag=self.tag)
+                [local_data_ptr_buf, local_data_size, data_type], remote_rank, tag=self.tag)
 
         # Need to update receiving array as well
         #self.remote_data_host = np.empty_like(local_data)
@@ -432,7 +432,7 @@ class _RankBoundaryCommunication:
         #remote_data_ptr_buf = memory_view(local_data_ptr + offset, size, PyBUF_WRITE) #from mybind11
         remote_data_ptr_buf = bytes(remote_data_ptr)
         # Get underlying pointer for remote data array
-        self.recv_req = comm.Irecv([remote_data_ptr_buf, data_type], remote_rank, self.tag)
+        self.recv_req = comm.Irecv([remote_data_ptr_buf, local_data_size, data_type], remote_rank, self.tag)
 
     def finish(self):
         self.recv_req.Wait()
