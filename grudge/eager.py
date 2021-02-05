@@ -411,7 +411,8 @@ class _RankBoundaryCommunication:
         size = local_data_size*local_data.dtype.itemsize
         #local_data_ptr_buf = PyMemoryView_FromMemory((char *) (local_data_ptr + offset), size, PyBUF_WRITE)
         #local_data_ptr_buf = memory_view(local_data_ptr + offset, size, PyBUF_WRITE) #from mybind11
-        local_data_ptr_buf = memoryview(bytes(local_data_ptr))
+        #local_data_ptr_buf = memoryview(bytes(local_data_ptr))
+        local_data_ptr_buf = memoryview(local_data_ptr)
 
         comm = self.discrwb.mpi_communicator
         data_type = self.discrwb.mpi_dtype
@@ -430,7 +431,8 @@ class _RankBoundaryCommunication:
         remote_data_ptr = cl_mem # Get device pointer out of cl_mem object
         #remote_data_ptr_buf = PyMemoryView_FromMemory((char *) (remote_data_ptr + offset), size, PyBUF_WRITE)
         #remote_data_ptr_buf = memory_view(local_data_ptr + offset, size, PyBUF_WRITE) #from mybind11
-        remote_data_ptr_buf = memoryview(bytes(remote_data_ptr))
+        #remote_data_ptr_buf = memoryview(bytes(remote_data_ptr))
+        remote_data_ptr_buf = memoryview(remote_data_ptr)
         # Get underlying pointer for remote data array
         self.recv_req = comm.Irecv([remote_data_ptr_buf, local_data_size, data_type], remote_rank, self.tag)
 
