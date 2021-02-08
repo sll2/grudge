@@ -441,7 +441,7 @@ class _RankBoundaryCommunication:
         local_data_ptr = cl_mem # Get device pointer out of cl_mem object
         size = local_data_size*local_data.dtype.itemsize
         #local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
-        local_data_ptr_buf = cacl.as_buffer(local_data_ptr, local_data_size, 0))
+        local_data_ptr_buf = cacl.as_buffer(local_data_ptr, local_data_size, 0)
 
         comm = self.discrwb.mpi_communicator
         data_type = self.discrwb.mpi_dtype
