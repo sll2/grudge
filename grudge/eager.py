@@ -34,6 +34,7 @@ from grudge.discretization import DGDiscretizationWithBoundaries
 from grudge.symbolic.primitives import TracePair
 
 from numbers import Number
+import cacl
 
 __doc__ = """
 .. autoclass:: EagerDGDiscretization
@@ -398,19 +399,19 @@ class _RankBoundaryCommunication:
         # If Nvidia GPU then call _initialize_gpu_comm otherwise _initialize_cpu_comm
         nvidia_gpu = False 
         if nvidia_gpu:
-            _initialize_gpu_comm(self)
+            self._initialize_gpu_comm(remote_rank)
         else:
-            _initialize_cpu_comm(self)
+            self._initialize_cpu_comm(remote_rank)
 
     def finish(self):
         # If Nvidia GPU then call _finish_gpu_comm otherwise _finish_cpu_comm
         nvidia_gpu = False
         if nvidia_gpu:
-            return _finish_gpu_comm(self)
+            return self._finish_gpu_comm()
         else:
-            return _finish_cpu_comm(self)
+            return self._finish_cpu_comm()
     
-    def _initialize_cpu_comm(self):
+    def _initialize_cpu_comm(self, remote_rank):
 
         # Copy array to cpu then send
         local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
@@ -439,22 +440,24 @@ class _RankBoundaryCommunication:
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
         local_data_ptr = cl_mem # Get device pointer out of cl_mem object
         size = local_data_size*local_data.dtype.itemsize
-        local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
+        #local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
+        local_data_ptr_buf = cacl.as_buffer(local_data_ptr, local_data_size, 0))
 
         comm = self.discrwb.mpi_communicator
         data_type = self.discrwb.mpi_dtype
 
         self.send_req = comm.Isend(
-                [local_data_ptr_buf, local_data_size, data_type], remote_rank, tag=self.tag)
+                [local_data_ptr_buf, data_type], remote_rank, tag=self.tag)
 
         # Need to update receiving array as well
         self.remote_data_host = self.array_context.empty(local_data_size, dtype=self.local_dof_array.entry_dtype)
         bdata = self.remote_data_host.base_data # Get base address of pyopencl array object in memory
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
         remote_data_ptr = cl_mem # Get device pointer out of cl_mem object
-        remote_data_ptr_buf = memoryview(bytearray(remote_data_ptr))
+        #remote_data_ptr_buf = memoryview(bytearray(remote_data_ptr))
+        remote_data_ptr_buf = cacl.as_buffer(remote_data_ptr, local_data_size, 0)
         # Get underlying pointer for remote data array
-        self.recv_req = comm.Irecv([remote_data_ptr_buf, local_data_size, data_type], remote_rank, self.tag)
+        self.recv_req = comm.Irecv([remote_data_ptr_buf, data_type], remote_rank, self.tag)
 
     def _finish_cpu_comm(self):
         self.recv_req.Wait()
