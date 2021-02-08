@@ -395,7 +395,38 @@ class _RankBoundaryCommunication:
         self.bdry_discr = discrwb.discr_from_dd(self.remote_btag)
         self.local_dof_array = discrwb.project("vol", self.remote_btag, vol_field)
 
-        #local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
+        # If Nvidia GPU then call _initialize_gpu_comm otherwise _initialize_cpu_comm
+        nvidia_gpu = False 
+        if nvidia_gpu:
+            _initialize_gpu_comm(self)
+        else:
+            _initialize_cpu_comm(self)
+
+    def finish(self):
+        # If Nvidia GPU then call _finish_gpu_comm otherwise _finish_cpu_comm
+        nvidia_gpu = False
+        if nvidia_gpu:
+            return _finish_gpu_comm(self)
+        else:
+            return _finish_cpu_comm(self)
+    
+    def _initialize_cpu_comm(self):
+
+        # Copy array to cpu then send
+        local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
+
+        comm = self.discrwb.mpi_communicator
+        data_type = self.discrwb.mpi_dtype
+
+        self.send_req = comm.Isend(
+                local_data, remote_rank, tag=self.tag)
+
+        # Create array for receiving then initialize receive
+        self.remote_data_host = np.empty_like(local_data)
+        self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
+    
+    def _initialize_gpu_comm(self):
+
         local_data = flatten(self.local_dof_array)
 
         # Need size of array after flattened -- could put this code somewhere else
@@ -407,41 +438,44 @@ class _RankBoundaryCommunication:
         bdata = local_data.base_data # Get base address of pyopencl array object in memory
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
         local_data_ptr = cl_mem # Get device pointer out of cl_mem object
-        #local_data_ptr_buf = bytes(local_data_ptr, 0, local_data_size*local_data.dtype.itemsize) # Need to wrap data in a python buffer object - offset of 0, starting at dev ptr
         size = local_data_size*local_data.dtype.itemsize
-        #local_data_ptr_buf = PyMemoryView_FromMemory((char *) (local_data_ptr + offset), size, PyBUF_WRITE)
-        #local_data_ptr_buf = memory_view(local_data_ptr + offset, size, PyBUF_WRITE) #from mybind11
-        #local_data_ptr_buf = memoryview(bytes(local_data_ptr))
         local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
 
         comm = self.discrwb.mpi_communicator
         data_type = self.discrwb.mpi_dtype
 
-        #self.send_req = comm.Isend(
-        #        local_data, remote_rank, tag=self.tag)
         self.send_req = comm.Isend(
                 [local_data_ptr_buf, local_data_size, data_type], remote_rank, tag=self.tag)
 
         # Need to update receiving array as well
-        #self.remote_data_host = np.empty_like(local_data)
-        #self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
         self.remote_data_host = self.array_context.empty(local_data_size, dtype=self.local_dof_array.entry_dtype)
         bdata = self.remote_data_host.base_data # Get base address of pyopencl array object in memory
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
         remote_data_ptr = cl_mem # Get device pointer out of cl_mem object
-        #remote_data_ptr_buf = PyMemoryView_FromMemory((char *) (remote_data_ptr + offset), size, PyBUF_WRITE)
-        #remote_data_ptr_buf = memory_view(local_data_ptr + offset, size, PyBUF_WRITE) #from mybind11
-        #remote_data_ptr_buf = memoryview(bytes(remote_data_ptr))
         remote_data_ptr_buf = memoryview(bytearray(remote_data_ptr))
         # Get underlying pointer for remote data array
         self.recv_req = comm.Irecv([remote_data_ptr_buf, local_data_size, data_type], remote_rank, self.tag)
 
-    def finish(self):
+    def _finish_cpu_comm(self):
         self.recv_req.Wait()
 
-        #actx = self.array_context
-        #remote_dof_array = unflatten(self.array_context, self.bdry_discr,
-        #        actx.from_numpy(self.remote_data_host))
+        actx = self.array_context
+        remote_dof_array = unflatten(self.array_context, self.bdry_discr,
+                actx.from_numpy(self.remote_data_host))
+
+        bdry_conn = self.discrwb.get_distributed_boundary_swap_connection(
+                sym.as_dofdesc(sym.DTAG_BOUNDARY(self.remote_btag)))
+        swapped_remote_dof_array = bdry_conn(remote_dof_array)
+
+        self.send_req.Wait()
+
+        return TracePair(self.remote_btag,
+                interior=self.local_dof_array,
+                exterior=swapped_remote_dof_array)
+    
+    def _finish_gpu_comm(self):
+        self.recv_req.Wait()
+
         remote_dof_array = unflatten(self.array_context, self.bdry_discr,
                 self.remote_data_host)
 
