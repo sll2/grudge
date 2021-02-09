@@ -427,6 +427,12 @@ class _RankBoundaryCommunication:
         if profile:
             profile.dev_copy_stop()
 
+        print(local_data.size, local_data.itemsize)
+        # Need size of array after flattened -- could put this code somewhere else
+        group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in self.local_dof_array]
+        group_starts = np.cumsum([0] + group_sizes)
+        print(group_starts[-1])
+
         comm = self.discrwb.mpi_info.comm
 
         # Start calculating timing profile
@@ -461,7 +467,6 @@ class _RankBoundaryCommunication:
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory
         local_data_ptr = cl_mem # Get device pointer out of cl_mem object
         bytes_size = local_data_size*local_data.dtype.itemsize
-        #local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
         local_data_ptr_buf = cacl.as_buffer(local_data_ptr, bytes_size, 0)
 
         comm = self.discrwb.mpi_info.comm
@@ -475,7 +480,6 @@ class _RankBoundaryCommunication:
         bdata = self.remote_data_host.base_data # Get base address of pyopencl array object in memory
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory
         remote_data_ptr = cl_mem # Get device pointer out of cl_mem object
-        #remote_data_ptr_buf = memoryview(bytearray(remote_data_ptr))
         remote_data_ptr_buf = cacl.as_buffer(remote_data_ptr, bytes_size, 0)
         # Get underlying pointer for remote data array
         self.recv_req = comm.Irecv([remote_data_ptr_buf, data_type], remote_rank, self.tag)
