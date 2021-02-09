@@ -443,7 +443,7 @@ class _RankBoundaryCommunication:
         if profile:
             profile.init_stop()
 
-    def _initialize_gpu_comm(self, profile):
+    def _initialize_gpu_comm(self, remote_rank, profile):
 
         local_data = flatten(self.local_dof_array)
 
