@@ -431,7 +431,7 @@ class _RankBoundaryCommunication:
         # Need size of array after flattened -- could put this code somewhere else
         group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in self.local_dof_array]
         group_starts = np.cumsum([0] + group_sizes)
-        print(group_starts[-1], dev_local_data.dtype.item_size)
+        print(group_starts[-1])
 
         comm = self.discrwb.mpi_info.comm
 
@@ -457,6 +457,7 @@ class _RankBoundaryCommunication:
         group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in self.local_dof_array]
         group_starts = np.cumsum([0] + group_sizes)
         local_data_size = group_starts[-1]
+        print(group_starts[-1], dev_local_data.dtype.item_size)
 
         # Start calculating timing profile
         if profile:
@@ -466,7 +467,8 @@ class _RankBoundaryCommunication:
         bdata = local_data.base_data # Get base address of pyopencl array object in memory
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory
         local_data_ptr = cl_mem # Get device pointer out of cl_mem object
-        bytes_size = local_data_size*local_data.dtype.itemsize
+        #bytes_size = local_data_size*local_data.dtype.itemsize
+        bytes_size = local_data_size*8
         local_data_ptr_buf = cacl.as_buffer(local_data_ptr, bytes_size, 0)
 
         comm = self.discrwb.mpi_info.comm
