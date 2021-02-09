@@ -114,13 +114,13 @@ class DGDiscretizationWithBoundaries:
             return self.mpi_info.comm.Get_rank() \
                     == self._get_management_rank_index()
 
-    def _set_up_distributed_communication(self, self.mpi_info.comm, array_context):
+    def _set_up_distributed_communication(self, mpi_communicator, array_context):
         from_dd = sym.DOFDesc("vol", sym.QTAG_NONE)
 
         from meshmode.distributed import get_connected_partitions
         connected_parts = get_connected_partitions(self._volume_discr.mesh)
 
-        if self.mpi_info.comm is None and connected_parts:
+        if mpi_communicator is None and connected_parts:
             raise RuntimeError("must supply an MPI communicator when using a "
                     "distributed mesh")
 
