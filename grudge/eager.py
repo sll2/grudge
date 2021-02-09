@@ -427,11 +427,9 @@ class _RankBoundaryCommunication:
         if profile:
             profile.dev_copy_stop()
 
-        print(local_data.size, local_data.itemsize)
         # Need size of array after flattened -- could put this code somewhere else
         group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in self.local_dof_array]
         group_starts = np.cumsum([0] + group_sizes)
-        print(group_starts[-1])
 
         comm = self.discrwb.mpi_info.comm
 
@@ -457,7 +455,7 @@ class _RankBoundaryCommunication:
         group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in self.local_dof_array]
         group_starts = np.cumsum([0] + group_sizes)
         local_data_size = group_starts[-1]
-        print(group_starts[-1], dev_local_data.dtype.item_size)
+        print(group_starts[-1], local_data.dtype.item_size)
 
         # Start calculating timing profile
         if profile:
