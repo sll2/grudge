@@ -396,37 +396,59 @@ class _RankBoundaryCommunication:
         self.bdry_discr = discrwb.discr_from_dd(self.remote_btag)
         self.local_dof_array = discrwb.project("vol", self.remote_btag, vol_field)
 
+        self.init_time = 0.0
+        self.finish_time = 0.0
+        self.data_move_time = 0.0
+
         # If Nvidia GPU then call _initialize_gpu_comm otherwise _initialize_cpu_comm
-        nvidia_gpu = False 
+        nvidia_gpu = False
         if nvidia_gpu:
-            self._initialize_gpu_comm(remote_rank)
+            self._initialize_gpu_comm(remote_rank, self.discrwb.comm_profiler)
         else:
-            self._initialize_cpu_comm(remote_rank)
+            print("before initialize")
+            self._initialize_cpu_comm(remote_rank, self.discrwb.comm_profiler)
+            print("after initialize")
 
     def finish(self):
         # If Nvidia GPU then call _finish_gpu_comm otherwise _finish_cpu_comm
         nvidia_gpu = False
         if nvidia_gpu:
-            return self._finish_gpu_comm()
+            return self._finish_gpu_comm(self.discrwb.comm_profiler)
         else:
-            return self._finish_cpu_comm()
-    
-    def _initialize_cpu_comm(self, remote_rank):
+            printf("before finish")
+            return self._finish_cpu_comm(self.discrwb.comm_profiler)
+            print("after finish")
+
+    def _initialize_cpu_comm(self, remote_rank, profiler):
 
         # Copy array to cpu then send
-        local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
+        local_data = flatten(self.local_dof_array)
+
+        # Calculate data movement time
+        if profiler:
+            self.data_move_time = profiler()
+        local_data = self.array_context.to_numpy(local_data)
+        if profiler:
+            self.data_move_time -= profiler()
 
         comm = self.discrwb.mpi_communicator
         data_type = self.discrwb.mpi_dtype
 
+        # Start calculating timing profile
+        if profiler:
+            self.init_time = profiler()
         self.send_req = comm.Isend(
                 local_data, remote_rank, tag=self.tag)
 
         # Create array for receiving then initialize receive
         self.remote_data_host = np.empty_like(local_data)
         self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
-    
-    def _initialize_gpu_comm(self):
+
+        # Finish calculating timing profile
+        if profiler:
+            self.init_time -= profiler()
+
+    def _initialize_gpu_comm(self, profiler):
 
         local_data = flatten(self.local_dof_array)
 
@@ -435,9 +457,13 @@ class _RankBoundaryCommunication:
         group_starts = np.cumsum([0] + group_sizes)
         local_data_size = group_starts[-1]
 
+        # Start calculating timing profile
+        if profiler:
+            self.init_time = profiler()
+
         # Need to pass in starting pointer of local_data and remote_data_host to mpi
         bdata = local_data.base_data # Get base address of pyopencl array object in memory
-        cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
+        cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory
         local_data_ptr = cl_mem # Get device pointer out of cl_mem object
         size = local_data_size*local_data.dtype.itemsize
         #local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
@@ -452,32 +478,58 @@ class _RankBoundaryCommunication:
         # Need to update receiving array as well
         self.remote_data_host = self.array_context.empty(local_data_size, dtype=self.local_dof_array.entry_dtype)
         bdata = self.remote_data_host.base_data # Get base address of pyopencl array object in memory
-        cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory 
+        cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory
         remote_data_ptr = cl_mem # Get device pointer out of cl_mem object
         #remote_data_ptr_buf = memoryview(bytearray(remote_data_ptr))
         remote_data_ptr_buf = cacl.as_buffer(remote_data_ptr, local_data_size, 0)
         # Get underlying pointer for remote data array
         self.recv_req = comm.Irecv([remote_data_ptr_buf, data_type], remote_rank, self.tag)
 
-    def _finish_cpu_comm(self):
-        self.recv_req.Wait()
+        # Finish calculating timing profile
+        if profiler:
+            self.init_time -= profiler()
 
+    def _finish_cpu_comm(self, profiler):
+        # Calculate profiling
+        if profiler:
+            self.finish_time = profiler()
+        self.recv_req.Wait()
+        if profiler:
+            self.finish_time -= profiler()
+
+        # Calculate data movement time
+        if profiler:
+            self.data_move_time = profiler()
         actx = self.array_context
+        remote_dof_array = actx.from_numpy(self.remote_data_host)
+        if profiler:
+            self.data_move_time -= profiler()
+
         remote_dof_array = unflatten(self.array_context, self.bdry_discr,
-                actx.from_numpy(self.remote_data_host))
+                remote_dof_array)
 
         bdry_conn = self.discrwb.get_distributed_boundary_swap_connection(
                 sym.as_dofdesc(sym.DTAG_BOUNDARY(self.remote_btag)))
         swapped_remote_dof_array = bdry_conn(remote_dof_array)
 
+        # Calculate profiling
+        if profiler:
+            self.finish_time += profiler()
         self.send_req.Wait()
+        if profiler:
+            self.finish_time -= profiler()
 
         return TracePair(self.remote_btag,
                 interior=self.local_dof_array,
                 exterior=swapped_remote_dof_array)
-    
-    def _finish_gpu_comm(self):
+
+    def _finish_gpu_comm(self, profiler):
+        # Calculate profiling
+        if profiler:
+            self.finish_time = profiler()
         self.recv_req.Wait()
+        if profiler:
+            self.finish_time -= profiler()
 
         remote_dof_array = unflatten(self.array_context, self.bdry_discr,
                 self.remote_data_host)
@@ -486,7 +538,12 @@ class _RankBoundaryCommunication:
                 sym.as_dofdesc(sym.DTAG_BOUNDARY(self.remote_btag)))
         swapped_remote_dof_array = bdry_conn(remote_dof_array)
 
+        # Calculate profiling
+        if profiler:
+            self.finish_time += profiler()
         self.send_req.Wait()
+        if profiler:
+            self.finish_time -= profiler()
 
         return TracePair(self.remote_btag,
                 interior=self.local_dof_array,
