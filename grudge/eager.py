@@ -418,12 +418,12 @@ class _RankBoundaryCommunication:
     def _initialize_cpu_comm(self, remote_rank, profile):
 
         # Copy array to cpu then send
-        local_data = flatten(self.local_dof_array)
+        dev_local_data = flatten(self.local_dof_array)
 
         # Calculate data movement time
         if profile:
             profile.dev_copy_start()
-        local_data = self.array_context.to_numpy(local_data)
+        local_data = self.array_context.to_numpy(dev_local_data)
         if profile:
             profile.dev_copy_stop()
 
@@ -431,7 +431,7 @@ class _RankBoundaryCommunication:
         # Need size of array after flattened -- could put this code somewhere else
         group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in self.local_dof_array]
         group_starts = np.cumsum([0] + group_sizes)
-        print(group_starts[-1], local_data.dtype.item_size)
+        print(group_starts[-1], dev_local_data.dtype.item_size)
 
         comm = self.discrwb.mpi_info.comm
 
