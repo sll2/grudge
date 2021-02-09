@@ -135,7 +135,7 @@ class DGDiscretizationWithBoundaries:
                     from_dd,
                     sym.DOFDesc(sym.BTAG_PARTITION(i_remote_part), sym.QTAG_NONE))
             setup_helper = setup_helpers[i_remote_part] = MPIBoundaryCommSetupHelper(
-                    self.mpi_info.comm, array_context, conn,
+                    mpi_communicator, array_context, conn,
                     i_remote_part, grp_factory)
             setup_helper.post_sends()
 
