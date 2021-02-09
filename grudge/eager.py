@@ -460,9 +460,9 @@ class _RankBoundaryCommunication:
         bdata = local_data.base_data # Get base address of pyopencl array object in memory
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory
         local_data_ptr = cl_mem # Get device pointer out of cl_mem object
-        size = local_data_size*local_data.dtype.itemsize
+        bytes_size = local_data_size*local_data.dtype.itemsize
         #local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
-        local_data_ptr_buf = cacl.as_buffer(local_data_ptr, local_data_size, 0)
+        local_data_ptr_buf = cacl.as_buffer(local_data_ptr, bytes_size, 0)
 
         comm = self.discrwb.mpi_info.comm
         data_type = self.discrwb.mpi_info.d_type
@@ -476,7 +476,7 @@ class _RankBoundaryCommunication:
         cl_mem = bdata.int_ptr # Get pointer to underlying cl_mem object in memory
         remote_data_ptr = cl_mem # Get device pointer out of cl_mem object
         #remote_data_ptr_buf = memoryview(bytearray(remote_data_ptr))
-        remote_data_ptr_buf = cacl.as_buffer(remote_data_ptr, local_data_size, 0)
+        remote_data_ptr_buf = cacl.as_buffer(remote_data_ptr, bytes_size, 0)
         # Get underlying pointer for remote data array
         self.recv_req = comm.Irecv([remote_data_ptr_buf, data_type], remote_rank, self.tag)
 
