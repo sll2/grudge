@@ -401,7 +401,7 @@ class _RankBoundaryCommunication:
         self.data_move_time = 0.0
 
         # If Nvidia GPU then call _initialize_gpu_comm otherwise _initialize_cpu_comm
-        nvidia_gpu = False
+        nvidia_gpu = self.discrwb.mpi_info.cuda_flag
         if nvidia_gpu:
             self._initialize_gpu_comm(remote_rank, self.discrwb.mpi_profile)
         else:
@@ -409,7 +409,7 @@ class _RankBoundaryCommunication:
 
     def finish(self):
         # If Nvidia GPU then call _finish_gpu_comm otherwise _finish_cpu_comm
-        nvidia_gpu = False
+        nvidia_gpu = self.discrwb.mpi_info.cuda_flag
         if nvidia_gpu:
             return self._finish_gpu_comm(self.discrwb.mpi_profile)
         else:
@@ -427,8 +427,7 @@ class _RankBoundaryCommunication:
         if profile:
             profile.dev_copy_stop()
 
-        comm = self.discrwb.mpi_communicator
-        data_type = self.discrwb.mpi_dtype
+        comm = self.discrwb.mpi_info.comm
 
         # Start calculating timing profile
         if profile:
@@ -465,8 +464,8 @@ class _RankBoundaryCommunication:
         #local_data_ptr_buf = memoryview(bytearray(local_data_ptr))
         local_data_ptr_buf = cacl.as_buffer(local_data_ptr, local_data_size, 0)
 
-        comm = self.discrwb.mpi_communicator
-        data_type = self.discrwb.mpi_dtype
+        comm = self.discrwb.mpi_info.comm
+        data_type = self.discrwb.mpi_info.d_type
 
         self.send_req = comm.Isend(
                 [local_data_ptr_buf, data_type], remote_rank, tag=self.tag)

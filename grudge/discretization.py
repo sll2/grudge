@@ -45,7 +45,7 @@ class DGDiscretizationWithBoundaries:
     """
 
     def __init__(self, array_context, mesh, order=None,
-            quad_tag_to_group_factory=None, mpi_communicator=None, mpi_dtype=None, comm_profile=None):
+            quad_tag_to_group_factory=None, mpi_info=None, comm_profile=None):
         """
         :param quad_tag_to_group_factory: A mapping from quadrature tags (typically
             strings--but may be any hashable/comparable object) to a
@@ -98,11 +98,9 @@ class DGDiscretizationWithBoundaries:
 
         self._dist_boundary_connections = \
                 self._set_up_distributed_communication(
-                        mpi_communicator, array_context)
+                        mpi_info.comm, array_context)
 
-        self.mpi_communicator = mpi_communicator
-
-        self.mpi_dtype = mpi_dtype
+        self.mpi_info = mpi_info
 
         self.mpi_profile = comm_profile
 
@@ -110,19 +108,19 @@ class DGDiscretizationWithBoundaries:
         return 0
 
     def is_management_rank(self):
-        if self.mpi_communicator is None:
+        if self.mpi_info.comm is None:
             return True
         else:
-            return self.mpi_communicator.Get_rank() \
+            return self.mpi_info.comm.Get_rank() \
                     == self._get_management_rank_index()
 
-    def _set_up_distributed_communication(self, mpi_communicator, array_context):
+    def _set_up_distributed_communication(self, self.mpi_info.comm, array_context):
         from_dd = sym.DOFDesc("vol", sym.QTAG_NONE)
 
         from meshmode.distributed import get_connected_partitions
         connected_parts = get_connected_partitions(self._volume_discr.mesh)
 
-        if mpi_communicator is None and connected_parts:
+        if self.mpi_info.comm is None and connected_parts:
             raise RuntimeError("must supply an MPI communicator when using a "
                     "distributed mesh")
 
@@ -137,7 +135,7 @@ class DGDiscretizationWithBoundaries:
                     from_dd,
                     sym.DOFDesc(sym.BTAG_PARTITION(i_remote_part), sym.QTAG_NONE))
             setup_helper = setup_helpers[i_remote_part] = MPIBoundaryCommSetupHelper(
-                    mpi_communicator, array_context, conn,
+                    self.mpi_info.comm, array_context, conn,
                     i_remote_part, grp_factory)
             setup_helper.post_sends()
 
