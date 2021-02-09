@@ -405,9 +405,7 @@ class _RankBoundaryCommunication:
         if nvidia_gpu:
             self._initialize_gpu_comm(remote_rank, self.discrwb.comm_profiler)
         else:
-            print("before initialize")
             self._initialize_cpu_comm(remote_rank, self.discrwb.comm_profiler)
-            print("after initialize")
 
     def finish(self):
         # If Nvidia GPU then call _finish_gpu_comm otherwise _finish_cpu_comm
@@ -415,9 +413,7 @@ class _RankBoundaryCommunication:
         if nvidia_gpu:
             return self._finish_gpu_comm(self.discrwb.comm_profiler)
         else:
-            printf("before finish")
             return self._finish_cpu_comm(self.discrwb.comm_profiler)
-            print("after finish")
 
     def _initialize_cpu_comm(self, remote_rank, profiler):
 
@@ -426,17 +422,17 @@ class _RankBoundaryCommunication:
 
         # Calculate data movement time
         if profiler:
-            self.data_move_time = profiler()
+            self.data_move_time -= profiler()
         local_data = self.array_context.to_numpy(local_data)
         if profiler:
-            self.data_move_time -= profiler()
+            self.data_move_time += profiler()
 
         comm = self.discrwb.mpi_communicator
         data_type = self.discrwb.mpi_dtype
 
         # Start calculating timing profile
         if profiler:
-            self.init_time = profiler()
+            self.init_time -= profiler()
         self.send_req = comm.Isend(
                 local_data, remote_rank, tag=self.tag)
 
@@ -446,7 +442,7 @@ class _RankBoundaryCommunication:
 
         # Finish calculating timing profile
         if profiler:
-            self.init_time -= profiler()
+            self.init_time += profiler()
 
     def _initialize_gpu_comm(self, profiler):
 
@@ -459,7 +455,7 @@ class _RankBoundaryCommunication:
 
         # Start calculating timing profile
         if profiler:
-            self.init_time = profiler()
+            self.init_time -= profiler()
 
         # Need to pass in starting pointer of local_data and remote_data_host to mpi
         bdata = local_data.base_data # Get base address of pyopencl array object in memory
@@ -487,15 +483,15 @@ class _RankBoundaryCommunication:
 
         # Finish calculating timing profile
         if profiler:
-            self.init_time -= profiler()
+            self.init_time += profiler()
 
     def _finish_cpu_comm(self, profiler):
         # Calculate profiling
         if profiler:
-            self.finish_time = profiler()
+            self.finish_time -= profiler()
         self.recv_req.Wait()
         if profiler:
-            self.finish_time -= profiler()
+            self.finish_time += profiler()
 
         # Calculate data movement time
         if profiler:
@@ -514,10 +510,10 @@ class _RankBoundaryCommunication:
 
         # Calculate profiling
         if profiler:
-            self.finish_time += profiler()
+            self.finish_time -= profiler()
         self.send_req.Wait()
         if profiler:
-            self.finish_time -= profiler()
+            self.finish_time += profiler()
 
         return TracePair(self.remote_btag,
                 interior=self.local_dof_array,
@@ -526,10 +522,10 @@ class _RankBoundaryCommunication:
     def _finish_gpu_comm(self, profiler):
         # Calculate profiling
         if profiler:
-            self.finish_time = profiler()
+            self.finish_time -= profiler()
         self.recv_req.Wait()
         if profiler:
-            self.finish_time -= profiler()
+            self.finish_time += profiler()
 
         remote_dof_array = unflatten(self.array_context, self.bdry_discr,
                 self.remote_data_host)
@@ -540,10 +536,10 @@ class _RankBoundaryCommunication:
 
         # Calculate profiling
         if profiler:
-            self.finish_time += profiler()
+            self.finish_time -= profiler()
         self.send_req.Wait()
         if profiler:
-            self.finish_time -= profiler()
+            self.finish_time += profiler()
 
         return TracePair(self.remote_btag,
                 interior=self.local_dof_array,
