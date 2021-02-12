@@ -396,10 +396,6 @@ class _RankBoundaryCommunication:
         self.bdry_discr = discrwb.discr_from_dd(self.remote_btag)
         self.local_dof_array = discrwb.project("vol", self.remote_btag, vol_field)
 
-        self.init_time = 0.0
-        self.finish_time = 0.0
-        self.data_move_time = 0.0
-
         # If Nvidia GPU then call _initialize_gpu_comm otherwise _initialize_cpu_comm
         nvidia_gpu = self.discrwb.mpi_info.cuda_flag
         if nvidia_gpu:
@@ -452,6 +448,7 @@ class _RankBoundaryCommunication:
         group_starts = np.cumsum([0] + group_sizes)
         local_data_size = group_starts[-1]
 
+        # Put NEW SEND FUNCTION HERE
         # Start calculating timing profile
         if profile:
             profile.init_start()
@@ -464,12 +461,13 @@ class _RankBoundaryCommunication:
         bytes_size = local_data_size*8
         local_data_ptr_buf = cacl.as_buffer(local_data_ptr, bytes_size, 0)
 
-        comm = self.discrwb.mpi_info.comm
-        data_type = self.discrwb.mpi_info.d_type
+        comm = self.discrwb.comm.mpi_communicator
+        data_type = self.discrwb.comm.d_type
 
         self.send_req = comm.Isend(
                 [local_data_ptr_buf, data_type], remote_rank, tag=self.tag)
 
+        # Put NEW RECV FUNCTION HERE
         # Need to update receiving array as well
         self.remote_data_host = self.array_context.empty(local_data_size, dtype=self.local_dof_array.entry_dtype)
         bdata = self.remote_data_host.base_data # Get base address of pyopencl array object in memory
