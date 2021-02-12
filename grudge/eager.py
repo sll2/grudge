@@ -439,7 +439,7 @@ class _RankBoundaryCommunication:
         if profile:
             profile.init_stop()
 
-    def _initialize_gpu_comm(self, remote_rank, profile):
+    def _initialize_gpu_comm(self, remote_rank):
 
         local_data = flatten(self.local_dof_array)
 
@@ -450,8 +450,6 @@ class _RankBoundaryCommunication:
 
         # Put NEW SEND FUNCTION HERE
         # Start calculating timing profile
-        if profile:
-            profile.init_start()
 
         # Need to pass in starting pointer of local_data and remote_data_host to mpi
         bdata = local_data.base_data # Get base address of pyopencl array object in memory
@@ -476,10 +474,6 @@ class _RankBoundaryCommunication:
         remote_data_ptr_buf = cacl.as_buffer(remote_data_ptr, bytes_size, 0)
         # Get underlying pointer for remote data array
         self.recv_req = comm.Irecv([remote_data_ptr_buf, data_type], remote_rank, self.tag)
-
-        # Finish calculating timing profile
-        if profile:
-            profile.init_stop()
 
     def _finish_cpu_comm(self, profile):
         # Calculate profiling
@@ -515,13 +509,8 @@ class _RankBoundaryCommunication:
                 interior=self.local_dof_array,
                 exterior=swapped_remote_dof_array)
 
-    def _finish_gpu_comm(self, profile):
-        # Calculate profiling
-        if profile:
-            profile.finish_start()
+    def _finish_gpu_comm(self):
         self.recv_req.Wait()
-        if profile:
-            profile.finish_stop()
 
         remote_dof_array = unflatten(self.array_context, self.bdry_discr,
                 self.remote_data_host)
@@ -530,12 +519,7 @@ class _RankBoundaryCommunication:
                 sym.as_dofdesc(sym.DTAG_BOUNDARY(self.remote_btag)))
         swapped_remote_dof_array = bdry_conn(remote_dof_array)
 
-        # Calculate profiling
-        if profile:
-            profile.finish_start()
         self.send_req.Wait()
-        if profile:
-            profile.finish_stop()
 
         return TracePair(self.remote_btag,
                 interior=self.local_dof_array,
