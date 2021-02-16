@@ -407,7 +407,7 @@ class _RankBoundaryCommunication:
 
         self.send_req = comm.Isend(self.array_context, dev_local_data, local_data_size, remote_rank, self.tag)
         # Create array for receiving then initialize receive
-        self.remote_data_host = np.empty_like(actx.to_numpy(dev_local_data))
+        self.remote_data_host = np.empty_like(self.array_context.to_numpy(dev_local_data))
         self.recv_req = comm.Irecv(self.array_context, self.remote_data_host, local_data_size, remote_rank, self.tag)
 
     def finish(self):
