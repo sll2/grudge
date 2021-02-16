@@ -396,7 +396,7 @@ class _RankBoundaryCommunication:
         self.bdry_discr = discrwb.discr_from_dd(self.remote_btag)
         self.local_dof_array = discrwb.project("vol", self.remote_btag, vol_field)
 
-        # Initialize sends
+        # Initialize sends and receives
         comm = self.discrwb.mpi_communicator
         dev_local_data = flatten(self.local_dof_array)
 
@@ -406,8 +406,6 @@ class _RankBoundaryCommunication:
         local_data_size = group_starts[-1]
 
         self.send_req = comm.Isend(self.array_context, dev_local_data, local_data_size, remote_rank, self.tag)
-        # Create array for receiving then initialize receive
-        self.remote_data_host = np.empty_like(self.array_context.to_numpy(dev_local_data))
         self.recv_req = comm.Irecv(self.array_context, self.remote_data_host, local_data_size, remote_rank, self.tag)
 
     def finish(self):
@@ -415,9 +413,6 @@ class _RankBoundaryCommunication:
         comm = self.discrwb.mpi_communicator
 
         remote_dof_array = comm.Wait(self.recv_req, self.array_context, self.remote_data_host)
-
-        #actx = self.array_context
-        #remote_dof_array = actx.from_numpy(self.remote_data_host)
 
         remote_dof_array = unflatten(self.array_context, self.bdry_discr,
                                      remote_dof_array)
