@@ -396,20 +396,41 @@ class _RankBoundaryCommunication:
         self.bdry_discr = discrwb.discr_from_dd(self.remote_btag)
         self.local_dof_array = discrwb.project("vol", self.remote_btag, vol_field)
 
-        # If Nvidia GPU then call _initialize_gpu_comm otherwise _initialize_cpu_comm
-        nvidia_gpu = self.discrwb.mpi_info.cuda_flag
-        if nvidia_gpu:
-            self._initialize_gpu_comm(remote_rank, self.discrwb.mpi_profile)
-        else:
-            self._initialize_cpu_comm(remote_rank, self.discrwb.mpi_profile)
+        # Initialize sends
+        comm = self.discrwb.mpi_communicator
+        dev_local_data = flatten(self.local_dof_array)
+
+        # Need size of array after flattened -- could put this code somewhere else
+        group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in self.local_dof_array]
+        group_starts = np.cumsum([0] + group_sizes)
+        local_data_size = group_starts[-1]
+
+        self.send_req = comm.Isend(self.array_context, dev_local_data, local_data_size, remote_rank, self.tag)
+        # Create array for receiving then initialize receive
+        self.remote_data_host = np.empty_like(local_data)
+        self.recv_req = comm.Irecv(self.array_context, self.remote_data_host, local_data_size, remote_rank, self.tag)
 
     def finish(self):
-        # If Nvidia GPU then call _finish_gpu_comm otherwise _finish_cpu_comm
-        nvidia_gpu = self.discrwb.mpi_info.cuda_flag
-        if nvidia_gpu:
-            return self._finish_gpu_comm(self.discrwb.mpi_profile)
-        else:
-            return self._finish_cpu_comm(self.discrwb.mpi_profile)
+        # Wait for sends and receives
+        comm = self.discrwb.mpi_communicator
+
+        remote_dof_array = comm.Wait(self.recv_req, self.array_context, self.remote_data_host)
+
+        #actx = self.array_context
+        #remote_dof_array = actx.from_numpy(self.remote_data_host)
+
+        remote_dof_array = unflatten(self.array_context, self.bdry_discr,
+                                     remote_dof_array)
+
+        bdry_conn = self.discrwb.get_distributed_boundary_swap_connection(
+            sym.as_dofdesc(sym.DTAG_BOUNDARY(self.remote_btag)))
+        swapped_remote_dof_array = bdry_conn(remote_dof_array)
+
+        _ = comm.Wait(self.send_req)
+
+        return TracePair(self.remote_btag,
+                         interior=self.local_dof_array,
+                         exterior=swapped_remote_dof_array)
 
     def _initialize_cpu_comm(self, remote_rank, profile):
 

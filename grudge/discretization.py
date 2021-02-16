@@ -98,7 +98,7 @@ class DGDiscretizationWithBoundaries:
 
         self._dist_boundary_connections = \
                 self._set_up_distributed_communication(
-                        mpi_communicator.comm, array_context)
+                        mpi_communicator.mpi_communicator, array_context)
 
         self.mpi_communicator = mpi_communicator
 
@@ -106,10 +106,10 @@ class DGDiscretizationWithBoundaries:
         return 0
 
     def is_management_rank(self):
-        if self.mpi_communicator.comm is None:
+        if self.mpi_communicator.mpi_communicator is None:
             return True
         else:
-            return self.mpi_communicator.comm.Get_rank() \
+            return self.mpi_communicator.mpi_communicator.Get_rank() \
                     == self._get_management_rank_index()
 
     def _set_up_distributed_communication(self, mpi_communicator, array_context):
